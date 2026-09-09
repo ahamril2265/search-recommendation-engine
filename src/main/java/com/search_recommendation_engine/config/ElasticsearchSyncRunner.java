@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import java.util.List;
+import java.util.ArrayList;
 
 @Component
 @Order(3) // after ProductIndexInitializer (1) and ProductSeeder (2) — index and Postgres data must exist first
@@ -93,7 +94,19 @@ public class ElasticsearchSyncRunner implements CommandLineRunner {
                 product.getCategory().getName(),
                 product.getTags(),
                 product.getPopularityScore(),
-                product.getStockQuantity()
+                product.getStockQuantity(),
+                buildNameSuggest(product.getName())   // <-- new argument, matches the new field
         );
+    }
+
+    private List<String> buildNameSuggest(String productName) {
+        List<String> suggestions = new ArrayList<>();
+        suggestions.add(productName);
+        for (String word : productName.split("\\s+")) {
+            if (!suggestions.contains(word)) {
+                suggestions.add(word);
+            }
+        }
+        return suggestions;
     }
 }

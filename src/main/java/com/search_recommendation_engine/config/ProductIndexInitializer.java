@@ -37,6 +37,7 @@ public class ProductIndexInitializer implements CommandLineRunner {
 
         TypeMapping mapping = TypeMapping.of(m -> m
                 .properties("id", Property.of(p -> p.long_(l -> l)))
+                .properties("nameSuggest", Property.of(p -> p.completion(c -> c)))
 
                 // text field for fuzzy/partial search, with a .keyword multi-field
                 // for exact-match sorting or aggregation

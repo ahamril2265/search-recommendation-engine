@@ -11,6 +11,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.ArrayList;
+
 @Component
 public class ProductUpdateConsumer {
 
@@ -43,9 +46,6 @@ public class ProductUpdateConsumer {
                 return;
             }
 
-            // Consistency double-check: re-apply the event's values to Postgres,
-            // even though the REST layer already wrote them. Makes this consumer
-            // correct even if a future event source isn't the REST API.
             if (event.newPrice() != null) {
                 product.setPrice(event.newPrice());
             }
@@ -63,7 +63,8 @@ public class ProductUpdateConsumer {
                     product.getCategory().getName(),
                     product.getTags(),
                     product.getPopularityScore(),
-                    product.getStockQuantity()
+                    product.getStockQuantity(),
+                    buildNameSuggest(product.getName())
             );
 
             elasticsearchClient.index(idx -> idx
@@ -72,12 +73,6 @@ public class ProductUpdateConsumer {
                     .document(doc)
             );
 
-            // Invalidate the search cache. We can't target just the queries that
-            // included this product — @Cacheable keys by query params, not by
-            // product ID — so we clear the whole "productSearch" cache instead.
-            // This is a coarse-grained but correct invalidation strategy: better
-            // to serve a fresh result than a stale one, and search queries are
-            // cheap to recompute compared to serving wrong data.
             var cache = cacheManager.getCache("productSearch");
             if (cache != null) {
                 cache.clear();
@@ -89,4 +84,16 @@ public class ProductUpdateConsumer {
             log.error("Failed to process ProductUpdateEvent for product {}: {}", event.productId(), e.getMessage(), e);
         }
     }
+
+    private List<String> buildNameSuggest(String productName) {
+        List<String> suggestions = new ArrayList<>();
+        suggestions.add(productName);
+        for (String word : productName.split("\\s+")) {
+            if (!suggestions.contains(word)) {
+                suggestions.add(word);
+            }
+        }
+        return suggestions;
+    }
+
 }

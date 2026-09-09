@@ -22,5 +22,6 @@ public class ProductDocument {
     private List<String> tags;
     private long popularityScore;
     private int stockQuantity;
+    private List<String> nameSuggest;
 
 }
