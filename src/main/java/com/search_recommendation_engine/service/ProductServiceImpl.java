@@ -8,9 +8,13 @@ import com.search_recommendation_engine.exception.CategoryNotFoundException;
 import com.search_recommendation_engine.exception.ProductNotFoundException;
 import com.search_recommendation_engine.repository.CategoryRepository;
 import com.search_recommendation_engine.repository.ProductRepository;
+import com.search_recommendation_engine.event.ProductUpdateEvent;
+import com.search_recommendation_engine.event.ProductUpdateTransactionEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -18,10 +22,14 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
-    public ProductServiceImpl(ProductRepository productRepository, CategoryRepository categoryRepository) {
+    public ProductServiceImpl(ProductRepository productRepository,
+                                CategoryRepository categoryRepository,
+                                ApplicationEventPublisher applicationEventPublisher) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     @Override
@@ -75,6 +83,20 @@ public class ProductServiceImpl implements ProductService {
         existing.setTags(request.tags());
 
         Product updated = productRepository.save(existing);
+
+        // Publish an internal Spring event now, but the actual Kafka publish
+        // is deferred until AFTER this transaction commits — see
+        // ProductUpdateEventBridge. This closes the dual-write race condition.
+        applicationEventPublisher.publishEvent(new ProductUpdateTransactionEvent(
+                new ProductUpdateEvent(
+                        updated.getId(),
+                        "PRICE_CHANGE",
+                        updated.getPrice(),
+                        updated.getStockQuantity(),
+                        LocalDateTime.now()
+                )
+        ));
+
         return mapToResponseDTO(updated);
     }
 
